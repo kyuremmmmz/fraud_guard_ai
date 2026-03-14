@@ -17,9 +17,16 @@ Fraud Guard AI is a **blockchain transaction fraud detection tool** powered by m
 
 ---
 
+## Coming Soon / Planned Features
+
+- **Web Scraping** – Automatically collect wallet transaction data and other blockchain info.  
+- **Ethereum Market Analysis** – Integrate market trends, token prices, and smart contract activity to enhance fraud detection accuracy.  
+
+---
+
 ## Installation
 
 1. Clone this repository:
 ```bash
 git clone https://github.com/yourusername/fraud-guard-ai.git
-cd fraud-guard-ai
+cd fraud-guard-ai****
