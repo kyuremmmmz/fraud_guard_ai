@@ -1,57 +1,63 @@
-# main.py
-from fastapi import FastAPI, HTTPException
-import joblib
+from fastapi import FastAPI
+from pydantic import BaseModel
 import pandas as pd
+import joblib
 
-app = FastAPI()
+model = joblib.load("fraud_model.pkl")
+le = joblib.load("address_encoder.pkl")
 
-# ---------------------------
-# 1. Load model and dataset
-# ---------------------------
-model = joblib.load("fraudguard_model.pkl")
+# Load the dataset to extract features
+df_transactions = pd.read_csv("transaction_dataset.csv")
+df_transactions.columns = df_transactions.columns.str.strip()
 
-# Get exact feature names the model expects
-FEATURES_EXPECTED = list(model.feature_names_in_)
 
-# Load your CSV dataset (for testing)
-df_dataset = pd.read_csv("transaction_dataset.csv").fillna(0)
+app = FastAPI(title="Fraud Detection API")
 
-# Make sure we drop columns not in training
-df_dataset = df_dataset.drop(columns=["Unnamed: 0", "Index", "Address", "FLAG"], errors="ignore")
+class WalletPayload(BaseModel):
+    address: str
 
-# ---------------------------
-# 2. API Endpoint
-# ---------------------------
-@app.post("/analyze")
-async def analyze_wallet(data: dict):
+def extract_features(address: str):
     """
-    Analyze a wallet using a dataset row index.
-    Expects: {"row_index": int}
+    Return numeric features for a given address.
+    If address not in dataset, return safe defaults.
     """
-    row_index = data.get("row_index")
-    if row_index is None:
-        raise HTTPException(status_code=400, detail="Missing 'row_index' in request body")
-
-    # Validate row index
-    if row_index < 0 or row_index >= len(df_dataset):
-        raise HTTPException(status_code=400, detail="Invalid 'row_index'")
-
-    # Extract row features
-    row_features = df_dataset.iloc[row_index][FEATURES_EXPECTED]
-
-    # Convert to DataFrame
-    df_input = pd.DataFrame([row_features], columns=FEATURES_EXPECTED)
-
-    # Predict
-    try:
-        prob = model.predict_proba(df_input)[0]  # [not_fraud, fraud]
-        return {
-            "status": "1",
-            "message": "OK",
-            "result": {
-                "not_fraud_prob": float(prob[0]),
-                "fraud_prob": float(prob[1])
-            }
+    df_addr = df_transactions[df_transactions['Address'] == address]
+    
+    if not df_addr.empty:
+        features = {
+            'Unique Sent To Addresses': int(df_addr['Unique Sent To Addresses'].sum()),
+            'Number of Created Contracts': int(df_addr['Number of Created Contracts'].sum()),
+            'Unique Received From Addresses': int(df_addr['Unique Received From Addresses'].sum()),
+            'Address': le.transform([address])[0]
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+    else:
+        features = {
+            'Unique Sent To Addresses': 0,
+            'Number of Created Contracts': 0,
+            'Unique Received From Addresses': 0,
+            'Address': 0
+        }
+    return features
+
+
+@app.post("/analyze")
+async def analyze_wallet(payload: WalletPayload):
+    features = extract_features(payload.address)
+    
+    df_input = pd.DataFrame([features])
+    
+    flagged = bool(model.predict(df_input)[0])
+    fraud_score = float(model.predict_proba(df_input)[0][1] * 100)
+
+    total_txn_pattern = sum([
+        features['Unique Sent To Addresses'],
+        features['Number of Created Contracts'],
+        features['Unique Received From Addresses']
+    ])
+    
+    return {
+        "Address": payload.address,
+        "Total Transactions Pattern Match": total_txn_pattern,
+        "Flagged Address": flagged,
+        "Fraud Score": fraud_score
+    }
