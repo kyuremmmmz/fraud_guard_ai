@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
 import joblib
+from fastapi.middleware.cors import CORSMiddleware
 
 model = joblib.load("fraud_model.pkl")
 le = joblib.load("address_encoder.pkl")
@@ -12,6 +13,18 @@ df_transactions.columns = df_transactions.columns.str.strip()
 
 
 app = FastAPI(title="Fraud Detection API")
+origins = [
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class WalletPayload(BaseModel):
     address: str

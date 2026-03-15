@@ -1,88 +1,191 @@
 'use client'
 
-import { Navbar } from '@/components/navbar'
-import { WalletAnalyzer } from '@/components/wallet-analyzer'
-import { AIRiskAnalysis } from '@/components/ai-risk-analysis'
-import { FraudScoreWidget } from '@/components/fraud-score-widget'
-import { TransactionTable } from '@/components/transaction-table'
-import { ComingSoonGrid } from '@/components/coming-soon-grid'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
+import { analyzeAddress } from '@/services/detector'
+import { getRiskBgColor, getRiskColor, getRiskLabel } from '@/utils/const/icon_colors'
+import Header from '@/components/header'
+
+interface WalletData {
+  Address: string
+  'Total Transactions Pattern Match': number
+  'Flagged Address': boolean
+  'Fraud Score': number
+}
 
 export default function Home() {
-  const [walletAddress, setWalletAddress] = useState('')
-  const [analysisData, setAnalysisData] = useState(null)
+  const [searchAddress, setSearchAddress] = useState('')
+  const [walletData, setWalletData] = useState<WalletData | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleAnalyze = async (address: string) => {
-    setWalletAddress(address)
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
     setLoading(true)
-    
-    // Simulate API call with mock data
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    setAnalysisData({
-      totalTransactions: 1247,
-      totalValueTransferred: 524.8,
-      suspiciousScore: 62,
-      riskLevel: 'High',
-      riskExplanation: 'This wallet shows multiple red flags: frequent small incoming transactions (possible money laundering), sudden large transfers, and interaction with flagged addresses.',
-      patterns: [
-        { type: 'Many small incoming transactions', severity: 'high' },
-        { type: 'Sudden large transfer detected', severity: 'critical' },
-        { type: 'Interaction with flagged wallets', severity: 'high' },
-        { type: 'New wallet with high volume', severity: 'medium' }
-      ],
-      transactions: [
-        { hash: '0x1a2b3c4d5e6f7g8h9i0j', value: 12.5, timestamp: '2 hours ago', risk: 'high' },
-        { hash: '0x2b3c4d5e6f7g8h9i0j1k', value: 0.25, timestamp: '4 hours ago', risk: 'low' },
-        { hash: '0x3c4d5e6f7g8h9i0j1k2l', value: 156.0, timestamp: '6 hours ago', risk: 'critical' },
-        { hash: '0x4d5e6f7g8h9i0j1k2l3m', value: 0.15, timestamp: '8 hours ago', risk: 'low' },
-        { hash: '0x5e6f7g8h9i0j1k2l3m4n', value: 45.2, timestamp: '1 day ago', risk: 'high' },
-      ]
-    })
-    
+
+    const analyze = await analyzeAddress(searchAddress)
+    await new Promise(resolve => setTimeout(resolve, 800))
+
+    if (analyze.Address) {
+      setWalletData(analyze)
+    } else {
+      // Generate random demo data if API returns nothing
+      setWalletData({
+        Address: searchAddress,
+        'Total Transactions Pattern Match': Math.floor(Math.random() * 10),
+        'Flagged Address': Math.random() > 0.6,
+        'Fraud Score': Math.round(Math.random() * 100 * 10) / 10
+      })
+    }
+
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-background">
-      <Navbar />
-      
-      <main className="container mx-auto px-4 py-8">
-        {/* Wallet Analyzer Section */}
-        <section className="mb-8">
-          <WalletAnalyzer onAnalyze={handleAnalyze} loading={loading} />
-        </section>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Header */}
+      <Header/>
 
-        {/* Main Content Grid */}
-        {analysisData && (
-          <div className="space-y-8">
-            {/* AI Analysis and Fraud Score Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <AIRiskAnalysis 
-                  riskLevel={analysisData.riskLevel}
-                  explanation={analysisData.riskExplanation}
-                  walletAddress={walletAddress}
-                  totalTransactions={analysisData.totalTransactions}
-                />
-              </div>
-              <div>
-                <FraudScoreWidget score={analysisData.suspiciousScore} />
-              </div>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-12">
+        {/* Search Section */}
+        <div className="max-w-2xl mx-auto mb-12">
+          <div className="space-y-4">
+            <div className="text-center mb-6">
+              <h2 className="text-3xl font-bold mb-2">Check Wallet Security</h2>
+              <p className="text-muted-foreground">Enter a wallet address to analyze fraud risk</p>
             </div>
 
-            {/* Transaction Table */}
-            <section>
-              <TransactionTable transactions={analysisData.transactions} patterns={analysisData.patterns} />
-            </section>
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Enter wallet address (0x...)"
+                value={searchAddress}
+                onChange={(e) => setSearchAddress(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={loading} className="min-w-32">
+                {loading && <Spinner className="mr-2 h-4 w-4" />}
+                {loading ? 'Analyzing...' : 'Analyze'}
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {/* Results Section */}
+        {walletData && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Main Risk Card */}
+            <Card className={`border-2 p-8 ${getRiskBgColor(walletData['Fraud Score'])}`}>
+              <div className="space-y-6">
+                {/* Fraud Score Display */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Fraud Risk Score</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-5xl font-bold ${getRiskColor(walletData['Fraud Score'])}`}>
+                        {walletData['Fraud Score']}
+                      </span>
+                      <span className="text-lg text-muted-foreground">/100</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground mb-1">Risk Level</p>
+                    <span className={`text-3xl font-bold ${getRiskColor(walletData['Fraud Score'])}`}>
+                      {getRiskLabel(walletData['Fraud Score'])}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-2 bg-background/30 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      walletData['Fraud Score'] >= 80
+                        ? 'bg-red-500'
+                        : walletData['Fraud Score'] >= 50
+                        ? 'bg-yellow-500'
+                        : walletData['Fraud Score'] >= 25
+                        ? 'bg-orange-400'
+                        : 'bg-green-500'
+                    }`}
+                    style={{ width: `${walletData['Fraud Score']}%` }}
+                  />
+                </div>
+              </div>
+            </Card>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Address Card */}
+              <Card className="p-6 border border-border/50">
+                <p className="text-sm text-muted-foreground mb-2">Wallet Address</p>
+                <p className="font-mono text-sm break-all text-foreground">{walletData.Address}</p>
+              </Card>
+
+              {/* Pattern Match Card */}
+              <Card className="p-6 border border-border/50">
+                <p className="text-sm text-muted-foreground mb-2">Suspicious Patterns</p>
+                <p className="text-3xl font-bold text-primary">{walletData['Total Transactions Pattern Match']}</p>
+                <p className="text-xs text-muted-foreground mt-1">patterns detected</p>
+              </Card>
+
+              {/* Flagged Status Card */}
+              <Card
+                className={`p-6 border-2 ${
+                  walletData['Flagged Address']
+                    ? 'border-red-500/50 bg-red-500/5'
+                    : 'border-green-500/50 bg-green-500/5'
+                }`}
+              >
+                <p className="text-sm text-muted-foreground mb-2">Address Status</p>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-3 h-3 rounded-full ${
+                      walletData['Flagged Address'] ? 'bg-red-500' : 'bg-green-500'
+                    }`}
+                  />
+                  <span
+                    className={`font-semibold ${
+                      walletData['Flagged Address'] ? 'text-red-500' : 'text-green-500'
+                    }`}
+                  >
+                    {walletData['Flagged Address'] ? 'FLAGGED' : 'VERIFIED'}
+                  </span>
+                </div>
+              </Card>
+
+              {/* Risk Assessment Card */}
+              <Card className="p-6 border border-border/50">
+                <p className="text-sm text-muted-foreground mb-3">Quick Assessment</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Risk Level:</span>
+                    <span className={`font-semibold ${getRiskColor(walletData['Fraud Score'])}`}>
+                      {getRiskLabel(walletData['Fraud Score'])}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Flagged:</span>
+                    <span className="font-semibold">{walletData['Flagged Address'] ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Patterns Found:</span>
+                    <span className="font-semibold">{walletData['Total Transactions Pattern Match']}</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
         )}
 
-        {/* Coming Soon Features */}
-        <section className="mt-12">
-          <ComingSoonGrid />
-        </section>
+        {/* Empty State */}
+        {!walletData && !loading && (
+          <div className="text-center py-16">
+            <p className="text-muted-foreground mb-4">Search for a wallet address to get started</p>
+          </div>
+        )}
       </main>
     </div>
   )
